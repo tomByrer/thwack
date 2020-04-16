@@ -78,12 +78,10 @@ export default class Thwack {
     const stack = buildStack(this).flat(Infinity);
     return stack.reduce(
       (promise, listener) =>
-        promise.then(() => {
-          if (!event.propagationStopped) {
-            return listener(event);
-          }
-        }),
-      Promise.resolve()
+        promise.then(
+          () => (!event.propagationStopped && listener(event)) || promise
+        ),
+      Promise.resolve() // start with a promise
     );
   }
 }

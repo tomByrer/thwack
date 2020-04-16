@@ -264,11 +264,14 @@ describe('Thwack events', () => {
         e.preventDefault();
         return 'preventDefault';
       };
+      const callback2 = () => {};
       thwack.addEventListener('request', callback);
+      thwack.addEventListener('request', callback2);
       const resp = await thwack('foo', {
         fetch,
         foo: 'bar',
       });
+      thwack.removeEventListener('request', callback2);
       thwack.removeEventListener('request', callback);
       expect(fetch).toHaveBeenCalledTimes(0);
       expect(resp).toEqual('preventDefault');
