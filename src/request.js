@@ -22,11 +22,11 @@ const request = async function (requestOptions) {
   const requestEvent = new ThwackRequestEvent(
     combineOptions(this, requestOptions)
   );
-  this.dispatchEvent(requestEvent);
-  const { defaultPrevented, options, promise } = requestEvent;
+  const proxiedRequestResponse = await this.dispatchEvent(requestEvent);
+  const { defaultPrevented, options } = requestEvent;
 
   if (defaultPrevented) {
-    return promise;
+    return proxiedRequestResponse;
   }
 
   const {
@@ -63,9 +63,13 @@ const request = async function (requestOptions) {
     new ThwackResponse(response, options)
   );
 
-  if (!this.dispatchEvent(responseEvent)) {
-    return responseEvent.promise;
+  // dispatch a "response" event
+  const proxiedResponseResponse = await this.dispatchEvent(responseEvent);
+  if (responseEvent.defaultPrevented) {
+    return proxiedResponseResponse;
   }
+
+  // grab the thwackResponse in case it's changed
   const { thwackResponse } = responseEvent;
 
   if (thwackResponse.ok) {

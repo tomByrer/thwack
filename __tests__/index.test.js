@@ -57,44 +57,47 @@ describe('thwack', () => {
       response: fetch.response,
     });
   });
-  it('can be passed a relative URL with the origin of the window.location', () => {
+  it('can be passed a relative URL with the origin of the window.location', async () => {
     const fetch = createMockFetch();
-    thwack('foo', { fetch });
+    await thwack('foo', { fetch });
     expect(fetch).toBeCalledWith(`${defaultBaseUrl}foo`, {
       headers: defaultHeaders,
     });
   });
-  it('can be passed a fully qualified URL', () => {
+  it('can be passed a fully qualified URL', async () => {
     const fetch = createMockFetch();
-    thwack('http://donavon.com/', { fetch });
+    await thwack('http://donavon.com/', { fetch });
     expect(fetch).toBeCalledWith('http://donavon.com/', {
       headers: defaultHeaders,
     });
   });
-  it('can be passed a URL with params in the URL (ex: "/order/:id")', () => {
+  it('can be passed a URL with params in the URL (ex: "/order/:id")', async () => {
     const fetch = createMockFetch();
-    thwack('http://donavon.com/foo/:id', { fetch, params: { id: 123 } });
+    await thwack('http://donavon.com/foo/:id', { fetch, params: { id: 123 } });
     expect(fetch).toBeCalledWith('http://donavon.com/foo/123', {
       headers: defaultHeaders,
     });
   });
-  it('can be passed a URL with params which build them as a search query', () => {
+  it('can be passed a URL with params which build them as a search query', async () => {
     const fetch = createMockFetch();
-    thwack('http://donavon.com/foo', { fetch, params: { id: 123 } });
+    await thwack('http://donavon.com/foo', { fetch, params: { id: 123 } });
     expect(fetch).toBeCalledWith('http://donavon.com/foo?id=123', {
       headers: defaultHeaders,
     });
   });
-  it('can be passed a URL with an existing search query (ex: "/order?a=456")', () => {
+  it('can be passed a URL with an existing search query (ex: "/order?a=456")', async () => {
     const fetch = createMockFetch();
-    thwack('http://donavon.com/foo?a=456', { fetch, params: { id: 123 } });
+    await thwack('http://donavon.com/foo?a=456', {
+      fetch,
+      params: { id: 123 },
+    });
     expect(fetch).toBeCalledWith('http://donavon.com/foo?a=456&id=123', {
       headers: defaultHeaders,
     });
   });
-  it('sorts param keys when building search query', () => {
+  it('sorts param keys when building search query', async () => {
     const fetch = createMockFetch();
-    thwack('http://donavon.com/foo?foo=foo', {
+    await thwack('http://donavon.com/foo?foo=foo', {
       fetch,
       params: { b: 'b', c: 'c', a: 'a' },
     });
@@ -141,9 +144,9 @@ describe('thwack', () => {
     });
   });
 
-  it('does not override method (if specified) when data present', () => {
+  it('does not override method (if specified) when data present', async () => {
     const fetch = createMockFetch();
-    thwack('foo', {
+    await thwack('foo', {
       fetch,
       headers: { 'content-type': 'text/plain' },
       data: 'this is plain text',

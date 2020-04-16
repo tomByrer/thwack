@@ -3,7 +3,6 @@ import combineOptions from './utils/combineOptions';
 import ThwackResponseError from './ThwackErrors/ThwackResponseError';
 import buildUrl from './utils/buildUrl';
 import resolveOptionsFromArgs from './utils/resolveOptionsFromArgs';
-import ThwackStopPropagationError from './ThwackErrors/ThwackStopPropagationError';
 
 // TODO extend EventTarget eventually
 // this will simplify the add/remove event listener stuff
@@ -67,22 +66,24 @@ export default class Thwack {
     );
   }
 
-  dispatchEvent(initialEvent) {
-    const dispatchInstanceEvent = (instance, event) => {
+  dispatchEvent(event) {
+    const buildStack = (instance) => {
+      const thisStack = instance._listeners[event.type];
       if (instance._parent) {
-        dispatchInstanceEvent(instance._parent, event);
+        return [buildStack(instance._parent), thisStack];
       }
-      const stack = [...instance._listeners[event.type]];
-      stack.forEach((listener) => listener(event));
+      return thisStack;
     };
 
-    try {
-      dispatchInstanceEvent(this, initialEvent);
-    } catch (ex) {
-      if (!(ex instanceof ThwackStopPropagationError)) {
-        throw ex;
-      }
-    }
-    return !initialEvent.defaultPrevented;
+    const stack = buildStack(this).flat(Infinity);
+    return stack.reduce(
+      (promise, listener) =>
+        promise.then(() => {
+          if (!event.propagationStopped) {
+            return listener(event);
+          }
+        }),
+      Promise.resolve()
+    );
   }
 }

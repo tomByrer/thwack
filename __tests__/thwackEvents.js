@@ -10,6 +10,8 @@ import {
   mergeDefaults,
 } from '../jestUtils';
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe('Thwack events', () => {
   describe('calling addEventListener("request")', () => {
     it('has its callback called with options before calling fetch', async () => {
@@ -37,6 +39,37 @@ describe('Thwack events', () => {
         statusText: 'ok',
         response: fetch.response,
       });
+    });
+    it('callbacks can alter options', async () => {
+      const fetch = createMockFetch();
+      const callback = (event) => {
+        event.options = { ...event.options, url: 'bob' };
+      };
+      const options = {
+        url: 'foo',
+        fetch,
+        foo: 'bar',
+      };
+      thwack.addEventListener('request', callback);
+      await thwack(options);
+      thwack.removeEventListener('request', callback);
+      expect(fetch).toBeCalledWith(`${defaultBaseUrl}bob`, defaultFetchOptions);
+    });
+    it('async callbacks can alter options', async () => {
+      const fetch = createMockFetch();
+      const callback = async (event) => {
+        await sleep(100);
+        event.options = { ...event.options, url: 'bob' };
+      };
+      const options = {
+        url: 'foo',
+        fetch,
+        foo: 'bar',
+      };
+      thwack.addEventListener('request', callback);
+      await thwack(options);
+      thwack.removeEventListener('request', callback);
+      expect(fetch).toBeCalledWith(`${defaultBaseUrl}bob`, defaultFetchOptions);
     });
     it('can be called multiple times and see the effects from the other callbacks', async () => {
       const fetch = createMockFetch();
@@ -134,19 +167,109 @@ describe('Thwack events', () => {
         defaultFetchOptions
       );
     });
+
+    it('multiple parent events happen before child events', async () => {
+      const fetch = createMockFetch();
+      const instanceb = thwack.create();
+      const instancec = instanceb.create();
+      const callbacka = (e) => {
+        e.options = { ...e.options, url: `${e.options.url}/a` };
+      };
+      const callbackb = (e) => {
+        e.options = { ...e.options, url: `${e.options.url}/b` };
+      };
+      const callbackc = (e) => {
+        e.options = { ...e.options, url: `${e.options.url}/c` };
+      };
+      thwack.addEventListener('request', callbacka);
+      instanceb.addEventListener('request', callbackb);
+      instancec.addEventListener('request', callbackc);
+      await instancec('foo', {
+        fetch,
+        foo: 'bar',
+      });
+      instancec.removeEventListener('request', callbackc);
+      instanceb.removeEventListener('request', callbackb);
+      thwack.removeEventListener('request', callbacka);
+      expect(fetch).toBeCalledWith(
+        `${defaultBaseUrl}foo/a/b/c`,
+        defaultFetchOptions
+      );
+    });
+    it('events can be async and multiple parent events happen before child events', async () => {
+      const fetch = createMockFetch();
+      const instanceb = thwack.create();
+      const instancec = instanceb.create();
+      const callbacka = async (e) => {
+        e.options = { ...e.options, url: `${e.options.url}/a` };
+      };
+      const callbackb = async (e) => {
+        await sleep(100);
+        e.options = { ...e.options, url: `${e.options.url}/b` };
+      };
+      const callbackc = (e) => {
+        e.options = { ...e.options, url: `${e.options.url}/c` };
+      };
+      thwack.addEventListener('request', callbacka);
+      instanceb.addEventListener('request', callbackb);
+      instancec.addEventListener('request', callbackc);
+      await instancec('foo', {
+        fetch,
+        foo: 'bar',
+      });
+      instancec.removeEventListener('request', callbackc);
+      instanceb.removeEventListener('request', callbackb);
+      thwack.removeEventListener('request', callbacka);
+      expect(fetch).toBeCalledWith(
+        `${defaultBaseUrl}foo/a/b/c`,
+        defaultFetchOptions
+      );
+    });
+    it('multiple parent events happen before child events and a stopPropagation on the parent stops child events', async () => {
+      const fetch = createMockFetch();
+      const instanceb = thwack.create();
+      const instancec = instanceb.create();
+      const callbacka = jest.fn((e) => {
+        e.options = { ...e.options, url: `${e.options.url}/a` };
+        e.stopPropagation();
+      });
+      const callbackb = jest.fn((e) => {
+        e.options = { ...e.options, url: `${e.options.url}/b` };
+      });
+      const callbackc = jest.fn((e) => {
+        e.options = { ...e.options, url: `${e.options.url}/c` };
+      });
+      thwack.addEventListener('request', callbacka);
+      instanceb.addEventListener('request', callbackb);
+      instancec.addEventListener('request', callbackc);
+      await instancec('foo', {
+        fetch,
+        foo: 'bar',
+      });
+      instancec.removeEventListener('request', callbackc);
+      instanceb.removeEventListener('request', callbackb);
+      thwack.removeEventListener('request', callbacka);
+      expect(callbacka).toHaveBeenCalledTimes(1);
+      expect(callbackb).toHaveBeenCalledTimes(0);
+      expect(callbackc).toHaveBeenCalledTimes(0);
+      expect(fetch).toBeCalledWith(
+        `${defaultBaseUrl}foo/a`,
+        defaultFetchOptions
+      );
+    });
     it('a callback can call preventDefault() to prevent the fetch from happening', async () => {
       const fetch = createMockFetch();
-      const callback = jest.fn((e) => {
-        e.promise = Promise.resolve('preventDefault');
+      const callback = async (e) => {
+        // e.promise = Promise.resolve('preventDefault');
         e.preventDefault();
-      });
+        return 'preventDefault';
+      };
       thwack.addEventListener('request', callback);
       const resp = await thwack('foo', {
         fetch,
         foo: 'bar',
       });
       thwack.removeEventListener('request', callback);
-      expect(callback).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledTimes(0);
       expect(resp).toEqual('preventDefault');
     });
@@ -184,18 +307,33 @@ describe('Thwack events', () => {
     });
     it('a callback can call preventDefault() to prevent the fetch from happening', async () => {
       const fetch = createMockFetch();
-      const callback = jest.fn((e) => {
-        e.promise = Promise.resolve('preventDefault');
+      const callback = (e) => {
+        // await sleep(100);
         e.preventDefault();
-      });
+        return 'mock response';
+      };
       thwack.addEventListener('response', callback);
       const resp = await thwack('foo', {
         fetch,
         foo: 'bar',
       });
       thwack.removeEventListener('response', callback);
-      expect(callback).toHaveBeenCalledTimes(1);
-      expect(resp).toEqual('preventDefault');
+      expect(resp).toEqual('mock response');
+    });
+    it('an async callback can call preventDefault() to prevent the fetch from happening', async () => {
+      const fetch = createMockFetch();
+      const callback = async (e) => {
+        await sleep(100);
+        e.preventDefault();
+        return 'mock response';
+      };
+      thwack.addEventListener('response', callback);
+      const resp = await thwack('foo', {
+        fetch,
+        foo: 'bar',
+      });
+      thwack.removeEventListener('response', callback);
+      expect(resp).toEqual('mock response');
     });
   });
 
